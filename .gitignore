@@ -1,0 +1,7 @@
+/vendor/
+.phpunit.result.cache
+.phpcs.xml
+.phpcs.xml.dist
+/.idea/
+/.vscode/
+.DS_Store

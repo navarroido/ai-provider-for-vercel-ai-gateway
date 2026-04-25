@@ -1,0 +1,8 @@
+/vendor/
+.phpunit.result.cache
+.phpcs.xml
+.phpcs.xml.dist
+/.idea/
+.DS_Store
+config.bat
+node_modules

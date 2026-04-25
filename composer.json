@@ -1,0 +1,59 @@
+{
+    "name": "navarroido/ai-provider-for-vercel-ai-gateway",
+    "description": "AI Provider for Vercel AI Gateway for the PHP AI Client SDK. Works as both a Composer package and a WordPress plugin.",
+    "license": "GPL-2.0-or-later",
+    "keywords": [
+        "ai",
+        "vercel",
+        "vercel-ai-gateway",
+        "wordpress",
+        "llm"
+    ],
+    "homepage": "https://github.com/navarroido/ai-provider-for-vercel-ai-gateway",
+    "support": {
+        "issues": "https://github.com/navarroido/ai-provider-for-vercel-ai-gateway/issues",
+        "source": "https://github.com/navarroido/ai-provider-for-vercel-ai-gateway"
+    },
+    "require": {
+        "php": ">=7.4",
+        "wordpress/php-ai-client": "^0.4 || dev-trunk"
+    },
+    "require-dev": {
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+        "phpcompatibility/php-compatibility": "dev-develop",
+        "phpstan/phpstan": "~2.1",
+        "squizlabs/php_codesniffer": "^3.7 || ^4.0",
+        "wp-coding-standards/wpcs": "^3.0"
+    },
+    "suggest": {
+        "wordpress/php-ai-client": "Required. The core PHP AI Client SDK that this provider extends."
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "autoload": {
+        "psr-4": {
+            "WordPress\\VercelAiGatewayProvider\\": "includes/",
+            "WordPress\\VercelAiGatewayProvider\\Admin\\": "admin/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true,
+            "php-http/discovery": true
+        },
+        "optimize-autoloader": true,
+        "platform": {
+            "php": "7.4"
+        },
+        "sort-packages": true
+    },
+    "scripts": {
+        "lint": [
+            "@phpcs",
+            "@phpstan"
+        ],
+        "phpcbf": "phpcbf",
+        "phpcs": "phpcs",
+        "phpstan": "phpstan analyze --memory-limit=256M"
+    }
+}

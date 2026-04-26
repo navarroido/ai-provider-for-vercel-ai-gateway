@@ -17,7 +17,12 @@ use WordPress\VercelAiGatewayProvider\Providers\VercelAIGateway\VercelAIGatewayP
 use WordPress\VercelAiGatewayProvider\Providers\VercelAIGateway\VercelAIGatewayRequestAuthentication;
 
 use function WordPress\VercelAiGatewayProvider\clear_models_cache;
+use function WordPress\VercelAiGatewayProvider\core_connector_is_available;
+use function WordPress\VercelAiGatewayProvider\get_available_models_grouped;
 use function WordPress\VercelAiGatewayProvider\get_settings;
+
+use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_CORE_CONNECTOR_OPTION;
+use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_OPTION;
 
 /**
  * Settings screen under Settings → Vercel AI Gateway.
@@ -103,7 +108,7 @@ final class SettingsPage
 	{
 		register_setting(
 			self::SETTINGS_GROUP,
-			\VERCEL_AI_GATEWAY_PROVIDER_OPTION,
+			VERCEL_AI_GATEWAY_PROVIDER_OPTION,
 			[
 				'type'              => 'array',
 				'sanitize_callback' => [self::class, 'sanitize_settings'],
@@ -118,6 +123,23 @@ final class SettingsPage
 			'vercel_ai_gateway_provider_main',
 			__('API credentials', 'ai-provider-for-vercel-ai-gateway'),
 			static function (): void {
+				if (core_connector_is_available()) {
+					$connectorsUrl = admin_url('options-connectors.php');
+					echo '<p>';
+					printf(
+						/* translators: %s: link to the core Connectors admin screen */
+						esc_html__(
+							'API keys are managed centrally on the %s screen. Use the field below to pick a default model — any plugin that calls wp_ai_client_prompt() will be able to route requests through Vercel AI Gateway.',
+							'ai-provider-for-vercel-ai-gateway'
+						),
+						'<a href="' . esc_url($connectorsUrl) . '">' .
+							esc_html__('Settings → Connectors', 'ai-provider-for-vercel-ai-gateway') .
+						'</a>'
+					);
+					echo '</p>';
+					return;
+				}
+
 				echo '<p>' . esc_html__(
 					'Enter your Vercel AI Gateway API key and pick a default model. Any plugin that calls wp_ai_client_prompt() will be able to route requests through Vercel AI Gateway.',
 					'ai-provider-for-vercel-ai-gateway'
@@ -136,8 +158,16 @@ final class SettingsPage
 
 		add_settings_field(
 			'default_model',
-			__('Default model', 'ai-provider-for-vercel-ai-gateway'),
+			__('Default text model', 'ai-provider-for-vercel-ai-gateway'),
 			[self::class, 'render_default_model_field'],
+			self::PAGE_SLUG,
+			'vercel_ai_gateway_provider_main'
+		);
+
+		add_settings_field(
+			'default_image_model',
+			__('Default image model', 'ai-provider-for-vercel-ai-gateway'),
+			[self::class, 'render_default_image_model_field'],
 			self::PAGE_SLUG,
 			'vercel_ai_gateway_provider_main'
 		);
@@ -162,26 +192,47 @@ final class SettingsPage
 			$input = [];
 		}
 
-		$apiKey = isset($input['api_key']) ? trim((string) $input['api_key']) : '';
-		$apiKey = sanitize_text_field($apiKey);
+		// When the core Connectors screen owns the API key, the field is not
+		// rendered on this page — preserve whatever is already stored so a
+		// "Save changes" click on this page does not blow it away.
+		if (array_key_exists('api_key', $input)) {
+			$apiKey = sanitize_text_field(trim((string) $input['api_key']));
+		} else {
+			$apiKey = (string) ($current['api_key'] ?? '');
+		}
 
 		$defaultModel = isset($input['default_model']) ? trim((string) $input['default_model']) : '';
 		$defaultModel = sanitize_text_field($defaultModel);
 
-		// Bust the model cache when the API key changes — different keys can
-		// have access to different model rosters.
-		if ($apiKey !== ($current['api_key'] ?? '')) {
+		$defaultImageModel = isset($input['default_image_model']) ? trim((string) $input['default_image_model']) : '';
+		$defaultImageModel = sanitize_text_field($defaultImageModel);
+
+		// Bust the cached /v1/models list when:
+		//  - the API key changes (different keys can have different rosters), or
+		//  - either default-model selection changes — the directory augments
+		//    its output with user-configured defaults, so the cache must be
+		//    rebuilt to surface the new selection to the SDK.
+		$apiKeyChanged    = $apiKey !== ($current['api_key'] ?? '');
+		$textModelChanged = $defaultModel !== ($current['default_model'] ?? '');
+		$imageModelChanged = $defaultImageModel !== ($current['default_image_model'] ?? '');
+		if ($apiKeyChanged || $textModelChanged || $imageModelChanged) {
 			clear_models_cache();
 		}
 
 		return [
-			'api_key'       => $apiKey,
-			'default_model' => $defaultModel,
+			'api_key'             => $apiKey,
+			'default_model'       => $defaultModel,
+			'default_image_model' => $defaultImageModel,
 		];
 	}
 
 	/**
 	 * Renders the API key form field. Stored masked when set.
+	 *
+	 * When the WordPress core "Connectors" screen is available, this field
+	 * is replaced by a read-only summary that defers to that screen, since
+	 * core auto-discovers this provider and storing the key in two places
+	 * would only confuse the user.
 	 *
 	 * @since 1.0.0
 	 *
@@ -189,9 +240,14 @@ final class SettingsPage
 	 */
 	public static function render_api_key_field(): void
 	{
+		if (core_connector_is_available()) {
+			self::render_api_key_field_managed_by_core();
+			return;
+		}
+
 		$settings = get_settings();
 		$value    = (string) ($settings['api_key'] ?? '');
-		$option   = \VERCEL_AI_GATEWAY_PROVIDER_OPTION;
+		$option   = VERCEL_AI_GATEWAY_PROVIDER_OPTION;
 		printf(
 			'<input type="password" name="%1$s[api_key]" id="vercel_ai_gateway_api_key" value="%2$s" class="regular-text" autocomplete="off" />',
 			esc_attr($option),
@@ -216,7 +272,92 @@ final class SettingsPage
 	}
 
 	/**
-	 * Renders the default-model form field.
+	 * Renders the read-only API key summary used when WP core's Connectors
+	 * screen is in charge of the key.
+	 *
+	 * Shows where the key currently lives (database, env var, constant, or
+	 * not configured) without ever revealing the value, and links straight
+	 * to Settings → Connectors for editing.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	private static function render_api_key_field_managed_by_core(): void
+	{
+		$connectorsUrl = admin_url('options-connectors.php');
+		$status        = self::resolve_api_key_status();
+
+		echo '<p><strong>' . esc_html($status['label']) . '</strong>';
+		if ($status['detail'] !== '') {
+			echo ' <span class="description">' . esc_html($status['detail']) . '</span>';
+		}
+		echo '</p>';
+
+		echo '<p class="description">';
+		printf(
+			/* translators: %s: link to the core Connectors admin screen */
+			esc_html__('Manage this key on the %s screen.', 'ai-provider-for-vercel-ai-gateway'),
+			'<a href="' . esc_url($connectorsUrl) . '">' .
+				esc_html__('Settings → Connectors', 'ai-provider-for-vercel-ai-gateway') .
+			'</a>'
+		);
+		echo '</p>';
+	}
+
+	/**
+	 * Resolves where the active API key is coming from, for display in the
+	 * read-only summary on the settings page. Never returns the key itself.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return array{label: string, detail: string}
+	 */
+	private static function resolve_api_key_status(): array
+	{
+		$envValue = getenv('AI_GATEWAY_API_KEY');
+		if (is_string($envValue) && $envValue !== '') {
+			return [
+				'label'  => __('Configured via environment variable', 'ai-provider-for-vercel-ai-gateway'),
+				'detail' => __('AI_GATEWAY_API_KEY (environment) overrides any saved value.', 'ai-provider-for-vercel-ai-gateway'),
+			];
+		}
+
+		if (defined('AI_GATEWAY_API_KEY') && is_string(AI_GATEWAY_API_KEY) && AI_GATEWAY_API_KEY !== '') {
+			return [
+				'label'  => __('Configured via wp-config.php constant', 'ai-provider-for-vercel-ai-gateway'),
+				'detail' => __('AI_GATEWAY_API_KEY (constant) overrides any saved value.', 'ai-provider-for-vercel-ai-gateway'),
+			];
+		}
+
+		$coreKey = (string) get_option(VERCEL_AI_GATEWAY_PROVIDER_CORE_CONNECTOR_OPTION, '');
+		if ($coreKey !== '') {
+			return [
+				'label'  => __('Configured', 'ai-provider-for-vercel-ai-gateway'),
+				'detail' => __('Saved on Settings → Connectors.', 'ai-provider-for-vercel-ai-gateway'),
+			];
+		}
+
+		$settings = get_settings();
+		if (!empty($settings['api_key'])) {
+			return [
+				'label'  => __('Configured (legacy)', 'ai-provider-for-vercel-ai-gateway'),
+				'detail' => __('A value saved by an older version of this plugin is still being used as a fallback. Re-enter it on Settings → Connectors to migrate.', 'ai-provider-for-vercel-ai-gateway'),
+			];
+		}
+
+		return [
+			'label'  => __('Not configured', 'ai-provider-for-vercel-ai-gateway'),
+			'detail' => '',
+		];
+	}
+
+	/**
+	 * Renders the default text-generation model form field.
+	 *
+	 * Renders a <select> populated from /v1/models when the catalog is
+	 * available, otherwise falls back to a free-form text input so users
+	 * can still type a model id before they have a working API key.
 	 *
 	 * @since 1.0.0
 	 *
@@ -226,18 +367,172 @@ final class SettingsPage
 	{
 		$settings = get_settings();
 		$value    = (string) ($settings['default_model'] ?? '');
-		$option   = \VERCEL_AI_GATEWAY_PROVIDER_OPTION;
+		$catalog  = get_available_models_grouped();
+
+		self::render_model_select(
+			'default_model',
+			'vercel_ai_gateway_default_model',
+			$value,
+			$catalog['text'] ?? [],
+			$catalog['ok'] ?? false,
+			$catalog['error'] ?? null,
+			'openai/gpt-5.4',
+			__('Used for chat / text generation. Pick any text-capable model reported by /v1/models. Examples: openai/gpt-5.4, anthropic/claude-sonnet-4.6, xai/grok-4.1-fast-reasoning.', 'ai-provider-for-vercel-ai-gateway')
+		);
+	}
+
+	/**
+	 * Renders the default image-generation model form field.
+	 *
+	 * Image generation is a separate capability from text generation: most
+	 * chat models cannot produce images, and image-only models cannot reply
+	 * with text. Keeping the two preferences separate lets the same plugin
+	 * route /chat/completions and /images/generations to the right model.
+	 *
+	 * When set, this value is also prepended to the WordPress AI plugin's
+	 * `wpai_preferred_image_models` filter, so requests like "generate
+	 * featured image" go through Vercel AI Gateway.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @return void
+	 */
+	public static function render_default_image_model_field(): void
+	{
+		$settings = get_settings();
+		$value    = (string) ($settings['default_image_model'] ?? '');
+		$catalog  = get_available_models_grouped();
+
+		self::render_model_select(
+			'default_image_model',
+			'vercel_ai_gateway_default_image_model',
+			$value,
+			$catalog['image'] ?? [],
+			$catalog['ok'] ?? false,
+			$catalog['error'] ?? null,
+			'openai/gpt-image-1',
+			__('Used for image generation requests routed through this provider (e.g. the AI plugin\'s "Generate image" feature). Leave blank to skip routing image requests through Vercel AI Gateway.', 'ai-provider-for-vercel-ai-gateway')
+		);
+	}
+
+	/**
+	 * Renders one of the "default model" controls.
+	 *
+	 * Behaviour:
+	 *  - When the catalog is available and contains entries, render a
+	 *    <select> with one <option> per model. The currently saved value
+	 *    is annotated " (default)" so it is obvious which entry is active,
+	 *    and a saved value that is no longer in the catalog is preserved
+	 *    as a disabled "(saved, not in catalog)" entry so saving the form
+	 *    does not silently drop it.
+	 *  - When the catalog is empty (no key, error, or capability mismatch),
+	 *    fall back to a free-form text input — the user can still type the
+	 *    model id and we will not block the form on transient API issues.
+	 *
+	 * @since 1.0.0
+	 *
+	 * @param string                                       $fieldKey      Settings array key (e.g. "default_model").
+	 * @param string                                       $controlId     DOM id for the input/select.
+	 * @param string                                       $value         Currently saved value.
+	 * @param array<int, array{id: string, name: string}>  $models        Catalog entries appropriate for this field.
+	 * @param bool                                         $catalogOk     Whether the catalog fetch succeeded.
+	 * @param string|null                                  $catalogError  Error message from the catalog fetch, if any.
+	 * @param string                                       $placeholder   Placeholder shown when falling back to text input.
+	 * @param string                                       $description   Already-translated help text shown below the field.
+	 * @return void
+	 */
+	private static function render_model_select(
+		string $fieldKey,
+		string $controlId,
+		string $value,
+		array $models,
+		bool $catalogOk,
+		?string $catalogError,
+		string $placeholder,
+		string $description
+	): void {
+		$option = VERCEL_AI_GATEWAY_PROVIDER_OPTION;
+
+		if (!$catalogOk || $models === []) {
+			printf(
+				'<input type="text" name="%1$s[%2$s]" id="%3$s" value="%4$s" class="regular-text" placeholder="%5$s" />',
+				esc_attr($option),
+				esc_attr($fieldKey),
+				esc_attr($controlId),
+				esc_attr($value),
+				esc_attr($placeholder)
+			);
+			echo '<p class="description">' . esc_html($description) . '</p>';
+
+			if ($catalogError !== null && $catalogError !== '' && get_api_key() !== '') {
+				echo '<p class="description"><em>';
+				printf(
+					/* translators: %s: error message from the /v1/models call. */
+					esc_html__('Could not load the model catalog: %s', 'ai-provider-for-vercel-ai-gateway'),
+					esc_html($catalogError)
+				);
+				echo '</em></p>';
+			}
+			return;
+		}
+
 		printf(
-			'<input type="text" name="%1$s[default_model]" id="vercel_ai_gateway_default_model" value="%2$s" class="regular-text" placeholder="openai/gpt-5.4" />',
+			'<select name="%1$s[%2$s]" id="%3$s" class="regular-text">',
 			esc_attr($option),
-			esc_attr($value)
+			esc_attr($fieldKey),
+			esc_attr($controlId)
 		);
-		echo '<p class="description">';
-		esc_html_e(
-			'Examples: openai/gpt-5.4, anthropic/claude-sonnet-4.6, xai/grok-4.1-fast-reasoning. The provider will accept any model id reported by /v1/models.',
-			'ai-provider-for-vercel-ai-gateway'
+
+		printf(
+			'<option value="">%s</option>',
+			esc_html__('— Select a model —', 'ai-provider-for-vercel-ai-gateway')
 		);
-		echo '</p>';
+
+		$savedExistsInCatalog = false;
+		foreach ($models as $model) {
+			if ($model['id'] === $value) {
+				$savedExistsInCatalog = true;
+				break;
+			}
+		}
+
+		// If the saved value is missing from the catalog, surface it so
+		// "Save changes" without touching the field doesn't silently drop it.
+		if (!$savedExistsInCatalog && $value !== '') {
+			printf(
+				'<option value="%1$s" selected>%2$s</option>',
+				esc_attr($value),
+				esc_html(sprintf(
+					/* translators: %s: saved model id that no longer appears in /v1/models. */
+					__('%s (default — not in current catalog)', 'ai-provider-for-vercel-ai-gateway'),
+					$value
+				))
+			);
+		}
+
+		foreach ($models as $model) {
+			$id      = (string) $model['id'];
+			$display = $id;
+
+			if ($model['name'] !== '' && $model['name'] !== $id) {
+				$display = sprintf('%s (%s)', $model['name'], $id);
+			}
+
+			$isSaved = ($id === $value);
+			if ($isSaved) {
+				$display .= ' ' . __('(default)', 'ai-provider-for-vercel-ai-gateway');
+			}
+
+			printf(
+				'<option value="%1$s"%2$s>%3$s</option>',
+				esc_attr($id),
+				$isSaved ? ' selected' : '',
+				esc_html($display)
+			);
+		}
+
+		echo '</select>';
+		echo '<p class="description">' . esc_html($description) . '</p>';
 	}
 
 	/**

@@ -3,5 +3,6 @@
 .phpcs.xml
 .phpcs.xml.dist
 /.idea/
-/.vscode/
 .DS_Store
+config.bat
+node_modules

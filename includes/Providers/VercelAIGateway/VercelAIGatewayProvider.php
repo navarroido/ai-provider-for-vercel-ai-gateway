@@ -153,7 +153,7 @@ class VercelAIGatewayProvider extends AbstractApiProvider
 		} else {
 			throw new RuntimeException(
 				'Unsupported model capabilities for Vercel AI Gateway model "'
-				. $modelMetadata->getId() . '".'
+				. esc_html($modelMetadata->getId()) . '".'
 			);
 		}
 

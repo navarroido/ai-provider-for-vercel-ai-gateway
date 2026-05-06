@@ -19,10 +19,14 @@ use WordPress\VercelAiGatewayProvider\Providers\VercelAIGateway\VercelAIGatewayR
 use function WordPress\VercelAiGatewayProvider\clear_models_cache;
 use function WordPress\VercelAiGatewayProvider\core_connector_is_available;
 use function WordPress\VercelAiGatewayProvider\get_available_models_grouped;
-use function WordPress\VercelAiGatewayProvider\get_settings;
+use function WordPress\VercelAiGatewayProvider\get_plugin_settings;
 
 use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_CORE_CONNECTOR_OPTION;
 use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_OPTION;
+
+if (!defined('ABSPATH')) {
+	exit;
+}
 
 /**
  * Settings screen under Settings → Vercel AI Gateway.
@@ -186,7 +190,7 @@ final class SettingsPage
 	 */
 	public static function sanitize_settings($input): array
 	{
-		$current = get_settings();
+		$current = get_plugin_settings();
 
 		if (!is_array($input)) {
 			$input = [];
@@ -245,7 +249,7 @@ final class SettingsPage
 			return;
 		}
 
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 		$value    = (string) ($settings['api_key'] ?? '');
 		$option   = VERCEL_AI_GATEWAY_PROVIDER_OPTION;
 		printf(
@@ -338,7 +342,7 @@ final class SettingsPage
 			];
 		}
 
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 		if (!empty($settings['api_key'])) {
 			return [
 				'label'  => __('Configured (legacy)', 'ai-provider-for-vercel-ai-gateway'),
@@ -365,7 +369,7 @@ final class SettingsPage
 	 */
 	public static function render_default_model_field(): void
 	{
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 		$value    = (string) ($settings['default_model'] ?? '');
 		$catalog  = get_available_models_grouped();
 
@@ -399,7 +403,7 @@ final class SettingsPage
 	 */
 	public static function render_default_image_model_field(): void
 	{
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 		$value    = (string) ($settings['default_image_model'] ?? '');
 		$catalog  = get_available_models_grouped();
 
@@ -744,7 +748,7 @@ final class SettingsPage
 			return (string) call_user_func('WordPress\\VercelAiGatewayProvider\\get_api_key');
 		}
 
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 		return (string) ($settings['api_key'] ?? '');
 	}
 

@@ -22,7 +22,7 @@ use WordPress\AiClient\Providers\Models\DTO\SupportedOption;
 use WordPress\AiClient\Providers\Models\Enums\CapabilityEnum;
 use WordPress\AiClient\Providers\Models\Enums\OptionEnum;
 
-use function WordPress\VercelAiGatewayProvider\get_settings;
+use function WordPress\VercelAiGatewayProvider\get_plugin_settings;
 
 use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_MODELS_CACHE_KEY;
 use const WordPress\VercelAiGatewayProvider\VERCEL_AI_GATEWAY_PROVIDER_MODELS_CACHE_TTL;
@@ -137,11 +137,11 @@ class VercelAIGatewayModelMetadataDirectory extends AbstractApiBasedModelMetadat
 	 */
 	protected function augmentWithUserConfiguredDefaults(array $models): array
 	{
-		if (!function_exists('WordPress\\VercelAiGatewayProvider\\get_settings')) {
+		if (!function_exists('WordPress\\VercelAiGatewayProvider\\get_plugin_settings')) {
 			return $models;
 		}
 
-		$settings = get_settings();
+		$settings = get_plugin_settings();
 
 		$textModelId  = isset($settings['default_model']) ? (string) $settings['default_model'] : '';
 		$imageModelId = isset($settings['default_image_model']) ? (string) $settings['default_image_model'] : '';

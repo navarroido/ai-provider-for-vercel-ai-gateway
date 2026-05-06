@@ -1,7 +1,6 @@
 <?php
 /**
  * Plugin Name: AI Provider for Vercel AI Gateway
- * Plugin URI: https://github.com/navarroido/ai-provider-for-vercel-ai-gateway
  * Description: Registers Vercel AI Gateway as a provider for the WordPress AI Client (PHP AI Client SDK).
  * Requires at least: 6.9
  * Requires PHP: 7.4
@@ -71,7 +70,7 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
  *
  * @return array{api_key: string, default_model: string, default_image_model: string}
  */
-function get_settings(): array
+function get_plugin_settings(): array
 {
 	$defaults = [
 		'api_key'             => '',
@@ -89,7 +88,7 @@ function get_settings(): array
 
 /**
  * Option name written by the WordPress core "Connectors" admin screen
- * (Settings → Connectors, available since WP 7.0). The screen auto-discovers
+ * (Settings → Connectors, when available). The screen auto-discovers
  * any provider registered with the AI Client and stores its key under
  * `connectors_ai_{provider_id_with_underscores}_api_key`.
  *
@@ -123,7 +122,7 @@ function get_api_key(): string
 		return $coreKey;
 	}
 
-	$settings = get_settings();
+	$settings = get_plugin_settings();
 	if (!empty($settings['api_key'])) {
 		return (string) $settings['api_key'];
 	}
@@ -377,7 +376,7 @@ function filter_preferred_image_models($models): array
 		$models = [];
 	}
 
-	$settings   = get_settings();
+	$settings   = get_plugin_settings();
 	$imageModel = (string) ($settings['default_image_model'] ?? '');
 	if ($imageModel === '') {
 		return $models;

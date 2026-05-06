@@ -1,165 +1,138 @@
-# AI Provider for Vercel AI Gateway
+=== AI Provider for Vercel AI Gateway ===
+Contributors: navarroido
+Tags: ai, vercel, gateway, php-ai-client, image-generation
+Requires at least: 6.9
+Tested up to: 6.9
+Requires PHP: 7.4
+Stable tag: 1.0.0
+License: GPL-2.0-or-later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-A WordPress plugin that registers **Vercel AI Gateway** as a provider for the
-[WordPress AI Client (PHP AI Client SDK)](https://github.com/WordPress/php-ai-client).
+Connect the WordPress AI Client to Vercel AI Gateway for text and image generation through one provider.
 
-Once installed and configured with an API key, any plugin or theme that calls
-`wp_ai_client_prompt()` (or uses the SDK directly) can route prompts through
-Vercel AI Gateway and pick from the full catalog of models the gateway exposes
-— `openai/gpt-5.4`, `anthropic/claude-sonnet-4.6`, `xai/grok-4.1-fast-reasoning`,
-and so on — without writing any provider-specific code.
+== Description ==
 
-## Requirements
+A single API key gives you access to the full Vercel AI Gateway catalog: OpenAI, Anthropic, Google, xAI, BFL Flux, Bytedance Seedream, Recraft, and more through one OpenAI-compatible endpoint, with automatic routing between text and image generation.
 
-- WordPress **6.9+**
-- PHP **7.4+**
-- The `wordpress/php-ai-client` SDK (installed automatically via Composer; the
-  WordPress AI Client plugin already bundles it)
-- A Vercel AI Gateway API key (`AI_GATEWAY_API_KEY`)
+== Requirements ==
 
-## Installation
+- PHP 7.4 or higher
+- When using with WordPress, requires WordPress 6.9 or higher
+    - If using an older WordPress release, the [wordpress/php-ai-client](https://github.com/WordPress/php-ai-client) package must be installed
+- A Vercel AI Gateway API key
 
-### As a WordPress plugin (recommended)
+== Installation ==
 
-1. Copy the plugin folder into `wp-content/plugins/ai-provider-for-vercel-ai-gateway/`.
-2. From inside that folder run:
-   ```bash
-   composer install --no-dev
-   ```
-   This pulls in the `wordpress/php-ai-client` SDK that the provider builds on.
-   *(Skip this step if your site already loads the SDK through another plugin —
-   the bundled fallback autoloader will pick the provider classes up.)*
-3. Activate **AI Provider for Vercel AI Gateway** from
-   *Plugins → Installed Plugins*.
+### As a WordPress Plugin ###
 
-### As a Composer dependency
+1. Download the plugin files
+2. Upload to `/wp-content/plugins/ai-provider-for-vercel-ai-gateway/`
+3. Ensure WordPress 6.9 or higher is running (or the PHP AI Client plugin is installed and activated)
+4. Activate the plugin through the WordPress admin
 
-```bash
-composer require navarroido/ai-provider-for-vercel-ai-gateway
-```
+== Configuration ==
 
-The package autoloads through PSR-4 and registers itself with the AI Client at
-`init` priority 5.
+Provide your API key one of three ways (resolved in this priority order):
 
-## Configuration
-
-Go to **Settings → Vercel AI Gateway** and fill in:
-
-| Field           | Description                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------------- |
-| API key         | Your `AI_GATEWAY_API_KEY` from <https://vercel.com/dashboard/ai-gateway>. Stored as a WP option.     |
-| Default model   | The model id to use when no model is explicitly requested (e.g. `openai/gpt-5.4`).                  |
-
-Two utility buttons sit below the form:
-
-- **Test connection** — calls `GET /v1/models` with your saved key and reports
-  how many models are available.
-- **Clear model cache** — busts the 10-minute transient that stores the model
-  list (also cleared automatically when you change the API key).
-
-You can also define the key in `wp-config.php`:
+1. **WordPress core Connectors page** — *Settings → Connectors → Vercel AI Gateway* when that screen is available. Recommended.
+2. **Plugin settings** — *Settings → Vercel AI Gateway*, where you can also pick separate **default text** and **default image** models.
+3. **Constant or environment variable** — `AI_GATEWAY_API_KEY`:
 
 ```php
 define( 'AI_GATEWAY_API_KEY', 'vck_...' );
+// or
+putenv( 'AI_GATEWAY_API_KEY=vck_...' );
 ```
 
-The option set via the settings page wins; the constant is used as a fallback
-when the option is empty.
+The plugin avoids prompting for the key on its own settings page when WordPress core's Connectors flow is already managing it, so you never see two API key fields for the same provider.
 
-## Usage
+== Usage ==
 
-### `wp_ai_client_prompt()` (recommended)
+### With WordPress ###
+
+The provider auto-registers with the AI Client at `init` priority 5. Once your API key is set, just route prompts at `vercel-ai-gateway`:
 
 ```php
-$response = wp_ai_client_prompt(
-	'Summarise the latest WordPress release in two sentences.',
-	[
-		'provider' => 'vercel-ai-gateway',
-		'model'    => 'anthropic/claude-sonnet-4.6',
-	]
-);
+use WordPress\AiClient\AiClient;
 
-echo esc_html( $response->getText() );
+// Text generation
+$result = AiClient::prompt( 'Summarize the latest WordPress release in two sentences.' )
+    ->usingProvider( 'vercel-ai-gateway' )
+    ->usingModel( 'anthropic/claude-sonnet-4.6' )
+    ->generateTextResult();
+
+echo $result->toText();
+
+// Image generation
+$result = AiClient::prompt( 'A photorealistic golden retriever puppy on a beach.' )
+    ->usingProvider( 'vercel-ai-gateway' )
+    ->usingModel( 'google/gemini-3-pro-image' )
+    ->generateImageResult();
 ```
 
-### With chat history
+The same provider also picks up requests from the WordPress core "AI" plugin's abilities — Generate Text, Generate Image, summarize-post, title/excerpt/meta-description generation, and the media-library "Generate with AI" button — once you've selected your defaults under *Settings → Vercel AI Gateway*.
 
-```php
-use WordPress\AiClient\Messages\DTO\Message;
-use WordPress\AiClient\Messages\DTO\MessagePart;
-
-$prompt = [
-	new Message(
-		Message::ROLE_SYSTEM,
-		[ MessagePart::ofText( 'You are a helpful assistant.' ) ]
-	),
-	new Message(
-		Message::ROLE_USER,
-		[ MessagePart::ofText( 'Translate "good morning" to Hebrew.' ) ]
-	),
-];
-
-$response = wp_ai_client_prompt( $prompt, [
-	'provider' => 'vercel-ai-gateway',
-	'model'    => 'openai/gpt-5.4',
-] );
-```
-
-### Image input
-
-Models whose `/v1/models` modalities advertise image input (e.g. `openai/gpt-4o`)
-accept image parts the same way as any other AI Client provider:
-
-```php
-$prompt = [
-	new Message(
-		Message::ROLE_USER,
-		[
-			MessagePart::ofText( 'What is in this picture?' ),
-			MessagePart::ofRemoteFile( 'https://example.com/cat.png' ),
-		]
-	),
-];
-```
-
-### Direct SDK usage
+### As a Standalone Package ###
 
 ```php
 use WordPress\AiClient\AiClient;
 use WordPress\VercelAiGatewayProvider\Providers\VercelAIGateway\VercelAIGatewayProvider;
 
-$model  = VercelAIGatewayProvider::model( 'xai/grok-4.1-fast-reasoning' );
-$result = $model->generateTextResult( $prompt );
+$registry = AiClient::defaultRegistry();
+$registry->registerProvider( VercelAIGatewayProvider::class );
+
+putenv( 'AI_GATEWAY_API_KEY=vck_...' );
+
+$result = AiClient::prompt( 'Explain quantum computing.' )
+    ->usingProvider( 'vercel-ai-gateway' )
+    ->generateTextResult();
 ```
 
-## Capabilities
+== External services ==
 
-The provider currently advertises:
+This plugin connects to Vercel AI Gateway, an external API service provided by Vercel, to list available AI models and to send AI generation requests to the selected model through one OpenAI-compatible endpoint.
 
-- **Text generation** — every model returned by `/v1/models`.
+When you save or test your API key, open the plugin settings, or when the model cache expires, the plugin may send your Vercel AI Gateway API key to `https://ai-gateway.vercel.sh/v1/models` to retrieve the available model list. The model list is cached for 10 minutes in a WordPress transient.
+
+When AI Client code or a compatible WordPress AI feature uses this provider, the plugin sends the configured API key, selected model ID, prompt text, chat messages, image inputs when supplied, and request options needed for generation to Vercel AI Gateway endpoints such as `/v1/chat/completions` or `/v1/images/generations`. Vercel AI Gateway may route the request to the underlying model provider selected by the model ID.
+
+Vercel AI Gateway is provided by Vercel Inc. See the Vercel AI Gateway documentation at https://vercel.com/docs/ai-gateway, Vercel Terms of Service at https://vercel.com/legal/terms, and Vercel Privacy Policy at https://vercel.com/legal/privacy-policy.
+
+== Supported Models ==
+
+Available models are dynamically discovered from `GET /v1/models` (cached for 10 minutes in a WordPress transient) and grouped into text and image dropdowns based on each model's reported `type`, `modalities`, and `tags`. The parser recognizes:
+
+- **Text models** — every chat-completions model (OpenAI GPT, Anthropic Claude, xAI Grok, Mistral, etc.).
+- **Dedicated image models** — `openai/gpt-image-*`, `google/imagen-*`, `bfl/flux-*`, `bytedance/seedream-*`, `recraft/*`, served via `/v1/images/generations`.
+- **Multimodal chat-image models** — Gemini's `*-image` variants (Nano Banana / `google/gemini-2.5-flash-image`, Gemini 3 Pro Image / `google/gemini-3-pro-image`, etc.), served via `/v1/chat/completions` with `modalities: ["image"]`. The provider extracts images from the assistant message's `images[]` array and returns them as standard `Candidate` results.
+
+See the [Vercel AI Gateway model catalog](https://vercel.com/ai-gateway/models) for the full list.
+
+### Capabilities ###
+
+- **Text generation** — every model returned by `/v1/models` whose modalities include text output.
+- **Image generation** — both dedicated and chat-based image models, with the right endpoint chosen automatically.
 - **Chat history** — multi-turn conversations.
-- **Image input** — for models whose modalities include `image` on the input side.
-- **Image output** — for models whose modalities include `image` on the output side.
+- **Image input (vision)** — for models advertising image input modalities.
 
-Embeddings, tool calling, structured outputs, fallbacks, and routing
-options are intentionally **out of scope for the MVP**, but the architecture
-mirrors the OpenRouter provider so adding them is mostly a matter of dispatching
-to additional model classes from `VercelAIGatewayProvider::createModel()`.
+Embeddings, tool calling, and structured outputs are not yet exposed; adding them is a matter of dispatching to additional model classes from `VercelAIGatewayProvider::createModel()`.
 
-## How it works
+== Tuning ==
 
-| Class                                       | Responsibility                                                                                       |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `VercelAIGatewayProvider`                   | Extends `AbstractApiProvider`. Declares `https://ai-gateway.vercel.sh/v1` as the base URL.            |
-| `VercelAIGatewayRequestAuthentication`      | Adds `Authorization: Bearer <AI_GATEWAY_API_KEY>` to outgoing requests.                              |
-| `VercelAIGatewayModelMetadataDirectory`     | Calls `GET /models`, parses the response into `ModelMetadata`, caches via WP transients.             |
-| `VercelAIGatewayTextGenerationModel`        | Extends the SDK's `AbstractOpenAiCompatibleTextGenerationModel`; builds the `POST /chat/completions` request. |
-| `Admin\SettingsPage`                        | Exposes the WP Admin page (API key + default model + test/clear buttons).                            |
+### Request timeout ###
 
-The plugin uses the WordPress HTTP API (`wp_remote_*`) for the admin
-"Test connection" button; for the SDK path, requests flow through whatever
-HTTP transporter the AI Client is configured with.
+To avoid `cURL error 28: Operation timed out after 30001ms` on long summarization or slow models, every model instance ships with a 120-second default timeout. The AI plugin's own `RequestOptions` (e.g. its 90s for image generation) still take precedence when set. Override the default with:
 
-## License
+```php
+add_filter( 'vercel_ai_gateway_provider_request_timeout', static function () {
+    return 180.0; // seconds
+} );
+```
 
-GPL-2.0-or-later.
+### Model cache ###
+
+The model list is cached for 10 minutes per site. To flush it manually, click **Clear model cache** on the settings page. The cache is also invalidated automatically whenever you save a new API key or change either default model.
+
+== License ==
+
+GPL-2.0-or-later

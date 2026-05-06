@@ -158,15 +158,15 @@ class VercelAIGatewayChatImageGenerationModel extends AbstractOpenAiCompatibleTe
 		$responseData = $response->getData();
 
 		if (!is_array($responseData) || !isset($responseData['choices']) || !is_array($responseData['choices']) || empty($responseData['choices'])) {
-			throw ResponseException::fromMissingData($this->providerMetadata()->getName(), 'choices');
+			throw ResponseException::fromMissingData(esc_html($this->providerMetadata()->getName()), 'choices');
 		}
 
 		$candidates = [];
 		foreach ($responseData['choices'] as $index => $choiceData) {
 			if (!is_array($choiceData) || array_is_list($choiceData)) {
 				throw ResponseException::fromInvalidData(
-					$this->providerMetadata()->getName(),
-					"choices[{$index}]",
+					esc_html($this->providerMetadata()->getName()),
+					esc_html(sprintf('choices[%d]', (int) $index)),
 					'The value must be an associative array.'
 				);
 			}
@@ -178,7 +178,7 @@ class VercelAIGatewayChatImageGenerationModel extends AbstractOpenAiCompatibleTe
 
 		if ($candidates === []) {
 			throw ResponseException::fromInvalidData(
-				$this->providerMetadata()->getName(),
+				esc_html($this->providerMetadata()->getName()),
 				'choices[*].message.images',
 				'No images were returned by the model. The prompt may have been blocked, or the model may not support image output for this request.'
 			);

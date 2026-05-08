@@ -127,7 +127,8 @@ jobs:
             ./ "$SVN_DIR/trunk/"
 
           if svn ls "$SVN_URL/tags/$VERSION" >/dev/null 2>&1; then
-            echo "Tag $VERSION already exists. Updating trunk/assets only; no new tag will be created."
+            echo "Tag $VERSION already exists. Updating trunk/assets and tagged readme only; no new tag will be created."
+            cp "$SVN_DIR/trunk/readme.txt" "$SVN_DIR/tags/$VERSION/readme.txt"
           else
             echo "Creating SVN tag for version $VERSION."
             svn cp "$SVN_DIR/trunk" "$SVN_DIR/tags/$VERSION"

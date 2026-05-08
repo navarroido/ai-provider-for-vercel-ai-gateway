@@ -29,7 +29,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants.
-define('VERCEL_AI_GATEWAY_PROVIDER_VERSION', '1.0.0');
+define('VERCEL_AI_GATEWAY_PROVIDER_VERSION', '1.0.1');
 define('VERCEL_AI_GATEWAY_PROVIDER_FILE', __FILE__);
 define('VERCEL_AI_GATEWAY_PROVIDER_DIR', plugin_dir_path(__FILE__));
 

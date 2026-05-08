@@ -60,9 +60,7 @@ You can provide your Vercel AI Gateway API key in one of these ways:
 
 Example constant:
 
-```php
-define( 'AI_GATEWAY_API_KEY', 'vck_...' );
-```
+    define( 'AI_GATEWAY_API_KEY', 'vck_...' );
 
 If the WordPress Connectors screen is managing the key, the plugin settings page will show the key status instead of asking you to enter the same key twice.
 
@@ -76,16 +74,14 @@ If your AI feature lets you choose a provider or model, select Vercel AI Gateway
 
 Developers can also use the provider directly through the WordPress AI Client:
 
-```php
-use WordPress\AiClient\AiClient;
+    use WordPress\AiClient\AiClient;
 
-$result = AiClient::prompt( 'Summarize this post in two sentences.' )
-    ->usingProvider( 'vercel-ai-gateway' )
-    ->usingModel( 'anthropic/claude-sonnet-4.6' )
-    ->generateTextResult();
+    $result = AiClient::prompt( 'Summarize this post in two sentences.' )
+        ->usingProvider( 'vercel-ai-gateway' )
+        ->usingModel( 'anthropic/claude-sonnet-4.6' )
+        ->generateTextResult();
 
-echo $result->toText();
-```
+    echo $result->toText();
 
 == External services ==
 

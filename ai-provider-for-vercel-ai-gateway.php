@@ -4,7 +4,7 @@
  * Description: Registers Vercel AI Gateway as a provider for the WordPress AI Client (PHP AI Client SDK).
  * Requires at least: 6.9
  * Requires PHP: 7.4
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: navarroido
  * License: GPL-2.0-or-later
  * License URI: https://spdx.org/licenses/GPL-2.0-or-later.html

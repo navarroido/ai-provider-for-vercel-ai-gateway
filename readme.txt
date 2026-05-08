@@ -1,6 +1,6 @@
 === AI Provider for Vercel AI Gateway ===
 Contributors: navarroido
-Tags: ai, vercel, gateway, ai provider, image generation
+Tags: ai, vercel, ai gateway, artificial-intelligence, connector
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 7.4

@@ -3,8 +3,5 @@
 .phpcs.xml
 .phpcs.xml.dist
 /.idea/
+/.vscode/
 .DS_Store
-node_modules
-
-# env files (restored after malware cleanup)
-config.bat
